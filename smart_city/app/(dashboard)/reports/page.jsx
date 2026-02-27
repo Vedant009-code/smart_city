@@ -1,114 +1,429 @@
 "use client"
 
-import { FileText, Download, Calendar, Clock } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useEffect, useState } from "react"
+import jsPDF from "jspdf"
+
+import {
+  FileText,
+  Download,
+  Loader2
+} from "lucide-react"
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card"
+
 import { Badge } from "@/components/ui/badge"
+
 import { Button } from "@/components/ui/button"
+
 import {
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
-  TableRow,
+  TableRow
 } from "@/components/ui/table"
 
-const reports = [
-  { id: 1, name: "Daily Waste Collection Summary", type: "Waste", date: "Feb 27, 2026", status: "Generated" },
-  { id: 2, name: "Weekly Air Quality Report", type: "Pollution", date: "Feb 24, 2026", status: "Generated" },
-  { id: 3, name: "Monthly AI Analytics Report", type: "AI", date: "Feb 01, 2026", status: "Generated" },
-  { id: 4, name: "Automation Performance Report", type: "Automation", date: "Feb 27, 2026", status: "Pending" },
-  { id: 5, name: "Critical Incidents Report", type: "Alerts", date: "Feb 26, 2026", status: "Generated" },
-  { id: 6, name: "Sensor Health Report", type: "System", date: "Feb 25, 2026", status: "Generated" },
-]
+import { supabase } from "@/lib/supabaseClient"
 
-const reportStats = [
-  { label: "Reports This Month", value: "24", icon: FileText },
-  { label: "Scheduled Reports", value: "8", icon: Calendar },
-  { label: "Average Generation", value: "2.3s", icon: Clock },
-]
+
 
 export default function ReportsPage() {
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Reports</h1>
-        <p className="text-sm text-muted-foreground">Generate and manage system reports</p>
-      </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {reportStats.map((stat) => (
-          <Card key={stat.label} className="gap-0 py-3">
-            <CardContent className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                <stat.icon className="size-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">{stat.label}</p>
-                <p className="text-lg font-bold text-foreground">{stat.value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+
+
+
+  useEffect(() => {
+
+    fetchReports()
+
+    const channel = supabase
+      .channel("reports-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "reports"
+        },
+        fetchReports
+      )
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
+
+  }, [])
+
+
+
+  async function fetchReports() {
+
+    const { data } = await supabase
+      .from("reports")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    if (data) setReports(data)
+
+    setLoading(false)
+
+  }
+
+
+
+  // =====================
+  // WASTE REPORT
+  // =====================
+
+  async function generateWasteReport() {
+
+    setGenerating(true)
+
+    try {
+
+      const doc = new jsPDF()
+
+      const date = new Date().toLocaleString()
+
+      const { data: bins } = await supabase
+        .from("smart_bins")
+        .select("*")
+
+      const total = bins.length
+
+      const critical =
+        bins.filter(b => b.status === "Critical").length
+
+      const full =
+        bins.filter(b =>
+          b.status === "Full" ||
+          b.status === "Critical"
+        ).length
+
+      const empty =
+        bins.filter(b => b.status === "Empty").length
+
+
+      doc.setFontSize(18)
+      doc.text("Smart City Waste Report", 20, 20)
+
+      doc.setFontSize(12)
+      doc.text(`Generated: ${date}`, 20, 40)
+
+      doc.text(`Total Bins: ${total}`, 20, 60)
+      doc.text(`Critical Bins: ${critical}`, 20, 70)
+      doc.text(`Full Bins: ${full}`, 20, 80)
+      doc.text(`Empty Bins: ${empty}`, 20, 90)
+
+
+      const blob = doc.output("blob")
+
+      const fileName =
+        `waste-report-${Date.now()}.pdf`
+
+
+      // upload
+      const { error } =
+        await supabase.storage
+          .from("reports")
+          .upload(fileName, blob, {
+            contentType: "application/pdf",
+            upsert: true
+          })
+
+      if (error) throw error
+
+
+      // get public URL
+      const { data } =
+        supabase.storage
+          .from("reports")
+          .getPublicUrl(fileName)
+
+
+      const fileUrl = data.publicUrl
+
+
+      // save to DB
+      await supabase
+        .from("reports")
+        .insert({
+
+          report_name: "Waste Report",
+
+          report_type: "Waste",
+
+          status: "Generated",
+
+          file_url: fileUrl
+
+        })
+
+    }
+    catch (err) {
+
+      console.error(err)
+
+      alert("Waste report failed")
+
+    }
+
+    setGenerating(false)
+
+  }
+
+
+
+  // =====================
+  // AIR REPORT
+  // =====================
+
+  async function generateAirReport() {
+
+    setGenerating(true)
+
+    try {
+
+      const doc = new jsPDF()
+
+      const date = new Date().toLocaleString()
+
+      const { data } =
+        await supabase
+          .from("air_quality")
+          .select("*")
+          .order("updated_at", { ascending: false })
+          .limit(1)
+
+      const air = data[0]
+
+
+      doc.setFontSize(18)
+      doc.text("Smart City Air Quality Report", 20, 20)
+
+      doc.setFontSize(12)
+      doc.text(`Generated: ${date}`, 20, 40)
+
+      doc.text(`AQI: ${air.aqi}`, 20, 60)
+      doc.text(`PM2.5: ${air.pm25}`, 20, 70)
+      doc.text(`PM10: ${air.pm10}`, 20, 80)
+      doc.text(`CO: ${air.co}`, 20, 90)
+      doc.text(`NO2: ${air.no2}`, 20, 100)
+      doc.text(`SO2: ${air.so2}`, 20, 110)
+
+
+      const blob = doc.output("blob")
+
+      const fileName =
+        `air-report-${Date.now()}.pdf`
+
+
+      const { error } =
+        await supabase.storage
+          .from("reports")
+          .upload(fileName, blob, {
+            contentType: "application/pdf",
+            upsert: true
+          })
+
+      if (error) throw error
+
+
+      const { data: urlData } =
+        supabase.storage
+          .from("reports")
+          .getPublicUrl(fileName)
+
+
+      const fileUrl = urlData.publicUrl
+
+
+      await supabase
+        .from("reports")
+        .insert({
+
+          report_name: "Air Quality Report",
+
+          report_type: "Pollution",
+
+          status: "Generated",
+
+          file_url: fileUrl
+
+        })
+
+    }
+    catch (err) {
+
+      console.error(err)
+
+      alert("Air report failed")
+
+    }
+
+    setGenerating(false)
+
+  }
+
+
+
+  function downloadReport(url) {
+
+    if (!url) {
+      alert("File not available")
+      return
+    }
+
+    window.open(url, "_blank")
+
+  }
+
+
+
+  return (
+
+    <div className="flex flex-col gap-6">
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Report History</CardTitle>
-            <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90">
-              <FileText className="mr-1.5 size-3" />
-              Generate Report
+
+        <CardHeader className="flex flex-row justify-between">
+
+          <CardTitle>
+            Reports
+          </CardTitle>
+
+
+          <div className="flex gap-2">
+
+            <Button
+              size="sm"
+              onClick={generateWasteReport}
+              disabled={generating}
+            >
+
+              {generating
+                ? <Loader2 className="size-4 animate-spin"/>
+                : <FileText className="size-4"/>
+              }
+
+              Waste Report
+
             </Button>
+
+
+            <Button
+              size="sm"
+              onClick={generateAirReport}
+              disabled={generating}
+            >
+
+              Air Report
+
+            </Button>
+
           </div>
+
         </CardHeader>
+
+
+
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Report Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {reports.map((report) => (
-                <TableRow key={report.id}>
-                  <TableCell className="font-medium text-foreground">{report.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-[10px]">{report.type}</Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{report.date}</TableCell>
-                  <TableCell>
-                    <Badge
-                      className={`text-[10px] px-1.5 py-0 ${
-                        report.status === "Generated"
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-[var(--warning)] text-foreground"
-                      }`}
-                    >
-                      {report.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      disabled={report.status !== "Generated"}
-                    >
-                      <Download className="size-3.5 text-muted-foreground" />
-                      <span className="sr-only">Download report {report.name}</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+
+          {loading
+            ? "Loading..."
+            : (
+
+              <Table>
+
+                <TableHeader>
+
+                  <TableRow>
+
+                    <TableHead>Name</TableHead>
+
+                    <TableHead>Type</TableHead>
+
+                    <TableHead>Date</TableHead>
+
+                    <TableHead>Status</TableHead>
+
+                    <TableHead>Download</TableHead>
+
+                  </TableRow>
+
+                </TableHeader>
+
+
+
+                <TableBody>
+
+                  {reports.map(report => (
+
+                    <TableRow key={report.id}>
+
+                      <TableCell>
+                        {report.report_name}
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge>
+                          {report.report_type}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        {new Date(
+                          report.created_at
+                        ).toLocaleString()}
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge className="bg-green-600 text-white">
+                          {report.status}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            downloadReport(report.file_url)
+                          }
+                        >
+
+                          <Download className="size-4"/>
+
+                        </Button>
+
+                      </TableCell>
+
+                    </TableRow>
+
+                  ))}
+
+                </TableBody>
+
+              </Table>
+
+            )
+          }
+
         </CardContent>
+
       </Card>
+
     </div>
+
   )
+
 }

@@ -38,3 +38,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 ```bash
 npm install @supabase/supabase-js
 ```
+
+```bash
+npm install jspdf
+```

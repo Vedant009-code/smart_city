@@ -313,13 +313,7 @@ export default function AlertsPage() {
                   </div>
 
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => dismissAlert(alert.id)}
-                  >
-                    Dismiss
-                  </Button>
+                 
 
                 </div>
 

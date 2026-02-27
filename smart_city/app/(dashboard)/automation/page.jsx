@@ -1,4 +1,3 @@
-import { AutomationWorkflows } from "@/components/automation-workflows"
 import { AutomationLogs } from "@/components/automation-logs"
 
 export default function AutomationPage() {
@@ -8,7 +7,6 @@ export default function AutomationPage() {
         <h1 className="text-xl font-bold text-foreground">n8n Automation</h1>
         <p className="text-sm text-muted-foreground">Manage and monitor automated workflows and integrations</p>
       </div>
-      <AutomationWorkflows />
       <AutomationLogs />
     </div>
   )
