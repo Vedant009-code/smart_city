@@ -1,61 +1,135 @@
 "use client"
 
-import * as React from "react"
-import { Bell, MapPin, User } from "lucide-react"
-import { SidebarTrigger } from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
-import { Button } from "@/components/ui/button"
+import { useEffect, useState, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabaseClient"
+import { MapPin, PanelLeft } from "lucide-react"
 
-function LiveClock() {
-  const [time, setTime] = React.useState("")
+export function TopHeader() {
 
-  React.useEffect(() => {
-    const update = () => {
-      const now = new Date()
-      setTime(
-        now.toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-          hour12: true,
-        })
-      )
+  const router = useRouter()
+
+  const [user, setUser] = useState(null)
+  const [open, setOpen] = useState(false)
+
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+
+    getUser()
+
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpen(false)
+      }
     }
-    update()
-    const interval = setInterval(update, 1000)
-    return () => clearInterval(interval)
+
+    document.addEventListener("mousedown", handleClickOutside)
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+
   }, [])
 
-  return (
-    <span className="tabular-nums text-sm font-medium text-foreground">
-      {time || "--:--:-- --"}
-    </span>
-  )
-}
+  async function getUser() {
 
-export function TopNavbar() {
+    const { data } = await supabase.auth.getUser()
+
+    if (data.user) {
+      setUser(data.user)
+    }
+
+  }
+
+  async function handleLogout() {
+
+    await supabase.auth.signOut()
+
+    router.push("/login")
+
+  }
+
+  const firstLetter = user?.email?.charAt(0).toUpperCase() || "A"
+
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-card px-4">
-      <SidebarTrigger />
-      <Separator orientation="vertical" className="h-5" />
-      <div className="flex items-center gap-2">
-        <MapPin className="size-4 text-primary" />
-        <span className="text-sm font-medium text-foreground">Pune City</span>
-      </div>
-      <div className="ml-auto flex items-center gap-4">
-        <LiveClock />
-        
-        <Separator orientation="vertical" className="h-5" />
-        <div className="flex items-center gap-2">
-          <div className="flex size-8 items-center justify-center rounded-full bg-primary">
-            <User className="size-4 text-primary-foreground" />
-          </div>
-          <div className="hidden flex-col md:flex">
-            <span className="text-xs font-semibold text-foreground">Admin</span>
-            <span className="text-[10px] text-muted-foreground">System Administrator</span>
-          </div>
+
+    <div className="flex items-center justify-between px-6 py-3 border-b bg-white">
+
+      {/* LEFT SIDE (unchanged UI) */}
+      <div className="flex items-center gap-4">
+
+        <PanelLeft className="w-5 h-5 text-gray-600" />
+
+        <div className="flex items-center gap-2 text-sm text-gray-700">
+
+          <MapPin className="w-4 h-4" />
+
+          Pune City
+
         </div>
+
       </div>
-    </header>
+
+      {/* RIGHT SIDE (Admin profile with dropdown) */}
+      <div className="flex items-center gap-4 relative" ref={dropdownRef}>
+
+        {/* Time (optional, keep if already exists) */}
+        <div className="text-sm text-gray-600 hidden md:block">
+          {new Date().toLocaleTimeString()}
+        </div>
+
+        {/* Profile section */}
+        <div
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 cursor-pointer"
+        >
+
+          {/* Avatar circle */}
+          <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-semibold">
+            {firstLetter}
+          </div>
+
+          {/* Admin text */}
+          <div className="hidden md:block text-right">
+
+            
+
+            
+
+          </div>
+
+        </div>
+
+        {/* Dropdown */}
+        {open && (
+
+          <div className="absolute right-0 top-12 w-56 bg-white border rounded-lg shadow-lg">
+
+            <div className="px-4 py-3 border-b">
+
+              <div className="text-sm font-medium">
+                {user?.email}
+              </div>
+
+
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+            >
+              Logout
+            </button>
+
+          </div>
+
+        )}
+
+      </div>
+
+    </div>
+
   )
+
 }

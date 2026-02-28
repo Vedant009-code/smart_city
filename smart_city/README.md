@@ -42,3 +42,7 @@ npm install @supabase/supabase-js
 ```bash
 npm install jspdf
 ```
+
+```bash
+npm install groq-sdk
+```
